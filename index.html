@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Hoa\Compiler: write your own SQL parser</title>
+
+  <meta name="author" content="Kévin Gomez">
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <link rel="stylesheet" href="reveal.js/css/reveal.min.css">
+  <link rel="stylesheet" href="reveal.js/css/theme/default.css" id="theme">
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- For syntax highlighting -->
+  <link rel="stylesheet" href="reveal.js/lib/css/zenburn.css">
+
+  <script src="js/Hoa.js"></script>
+
+  <!-- If the query includes 'print-pdf', include the PDF print sheet -->
+  <script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+      var link = document.createElement( 'link' );
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = 'reveal.js/css/print/pdf.css';
+      document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+  </script>
+
+  <!--[if lt IE 9]>
+  <script src="reveal.js/lib/js/html5shiv.js"></script>
+  <![endif]-->
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <section>
+        <h1>Hoa\Compiler</h1>
+        <h2>Write your own SQL parser</h2>
+
+        <p>
+          <img src="./images/Hoa.png" width="45%" />
+        </p>
+      </section>
+
+      <section>
+        <h2>Let's play a game</h2>
+
+        <p>Écrire un parseur SQL ? Pourquoi donc ?</p>
+
+        <ul>
+          <li>Parce que c'est cool.</li>
+          <li>SQL vers DQL, QueryBuilder</li>
+          <li>SQL vers Propel Query</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Par contre ...</h2>
+
+        <ul>
+          <li>Qui dit SQL, dit langage</li>
+          <li>Qui dit langage, dit grammaire</li>
+          <li>Qui dit grammaire, dit aïe.</li>
+        </ul>
+      </section>
+
+      <section>
+        <section>
+          <h1>Quelques rappels</h1>
+        </section>
+
+        <section>
+          <h2>Qu'est-ce qu'un langage ?</h2>
+
+          <p>
+            Un <b>langage</b> est un ensemble de <b>mots</b> dont les
+            enchainements respectent une <b>structure</b>. Chaque mot est une
+            séquence de symboles appartenant à un <b>alphabet</b>.
+          </p>
+        </section>
+
+        <section>
+          <h2>Qu'est-ce qu'un langage ?</h2>
+
+          <p>
+            Autrement dit : <b>langage = notation conventionnelle</b> destinée à
+            formuler des idées.
+          </p>
+        </section>
+
+        <section>
+          <h2>Classes de langages/grammaires</h2>
+
+          <p style="float:left; width: 45%">
+            <img src="./images/Hi%C3%A9rarchieChomsky.svg" class="bg-light" style="width:100%;" />
+          </p>
+
+          <ul style="width: 50%">
+            <li>Grammaires régulières : expressions régulières</li>
+            <li>Grammaires non-contextuelles (algébriques) : la plupart des langages de programmation</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Lien entre langage et grammaire</h2>
+
+          <ul>
+            <li>Ensemble de conventions ⇒  grammaire</li>
+            <li>Convention ⇒  règle</li>
+            <li>Mot ⇒  lexème/token</li>
+          </ul>
+        </section>
+      </section>
+
+      <section>
+        <section>
+          <h1>Let's write our own SQL parser!</h1>
+        </section>
+
+        <section>
+          <h2>SQL?</h2>
+
+          <p style="overflow-y:scroll; height:600px">
+            <img src="./images/sql_99_bnf.png" style="height:26214px; max-height:none;"/>
+          </p>
+          <p>
+            Yeah, sure.
+          </p>
+        </section>
+
+        <section>
+          <h2>Our SQL</h2>
+
+          <pre><code data-trim>
+SELECT name FROM person
+SELECT name, age FROM person
+SELECT p.name, age FROM person AS p
+SELECT p.name, age, j.title AS job FROM person AS p, job j
+</code></pre>
+        </section>
+
+        <section>
+          <h2>Tokens</h2>
+
+          <pre><code data-trim>
+// keywords
+%token select       SELECT
+%token from         FROM
+%token as           AS
+
+// identifiers
+%token identifier   [a-zA-Z][a-zA-Z0-9_]*
+
+// rest
+%token comma        ,
+%token dot          .
+</code></pre>
+        </section>
+
+        <section>
+          <h2>Rules</h2>
+
+          <pre><code data-trim style="overflow:hidden">
+#TableIdentifier:
+    &lt;identifier&gt; (::as::? &lt;identifier&gt;)?
+#ColumnIdentifier:
+        &lt;identifier&gt;
+    |   TableIdentifier() ::dot:: &lt;identifier&gt;
+
+#SelectExpression:
+    ColumnIdentifier() (::as::? &lt;identifier&gt;)?
+
+#SelectClause:
+    ::select:: SelectExpression() (::comma:: SelectExpression())*
+
+#FromClause:
+    ::from:: TableIdentifier() (::comma:: TableIdentifier())*
+
+#SelectQuery:
+    SelectClause() FromClause()
+</code></pre>
+        </section>
+
+<!--
+        <section>
+          <h2>Grammaire</h2>
+
+          <ul>
+            <li><code>rule()</code> : pour invoquer une règle</li>
+            <li><code>&lt;token&gt;</code> et <code>::token::</code> : pour déclarer un lexème</li>
+            <li><code>|</code> : pour une disjonction</li>
+            <li><code>(…)</code> : pour grouper</li>
+            <li><code>e?</code>, <code>e+</code>, <code>e*</code> et <code>e{x,y}</code> pour répéter</li>
+            <li>#node pour créer un nœud dans l'AST</li>
+          </ul>
+        </section>
+-->
+
+<!--        <section>
+          <h2>Et après ?</h2>
+
+          <div id="parsers" class="verbatim schema"></div>
+<script>
+  Hoa.Document.onReady(function ( ) {
+
+      var paper    = Hoa.Graph(Hoa.$('#parsers'), 800, 180);
+      var grid     = paper.grid(0, 0, 800, 180, 5, 2);
+      var word     = grid.push(paper.rect(0, 0, 140, 80, 3, 'mot'), 0, 0);
+      var sequence = grid.push(paper.rect(0, 0, 140, 80, 3, 'séquence'), 2, 0);
+      var trace    = grid.push(paper.rect(0, 0, 140, 80, 3, 'résultat'), 4, 0);
+      grid.push(paper.rect(0, 0, 140, 50, 3, 'abcdef'), 0, 1);
+      grid.push(paper.rect(0, 0, 380, 50, 3, '[[a ⟼ …], [bc ⟼ …], [d ⟼ …], [ef ⟼ …]]'), 2, 1);
+      grid.push(paper.rect(0, 0, 140, 50, 3, 'valide/invalide'), 4, 1);
+
+      paper.link.between(word, sequence, 'analyseur lexical');
+      paper.link.between(sequence, trace, 'analyseur syntaxique');
+  });
+</script>
+        </section>
+-->
+
+        <section>
+          <h2>Hoa\Compiler \o/</h2>
+
+          <p><pre><code>SELECT name, age FROM person</code></pre></p>
+
+            <div class="fragment hidden">
+              Analyse lexicale
+              <br />
+<pre><code data-trim>
+ # namespace     token name           token value  offset
+----------------------------------------------------------
+ 0 default       select               SELECT        0
+ 1 default       identifier           name          7
+ 2 default       comma                ,            11
+ 3 default       identifier           age          13
+ 4 default       from                 FROM         17
+ 5 default       identifier           person       22
+ 6 default       EOF                               28
+</code></pre>
+          </div>
+
+          <div class="fragment hidden">
+            Analyse syntaxique
+            <br />
+<pre><code data-trim>
+&gt;  #SelectQuery
+&gt;  &gt;  #SelectClause
+&gt;  &gt;  &gt;  #SelectExpression
+&gt;  &gt;  &gt;  &gt;  #ColumnIdentifier
+&gt;  &gt;  &gt;  &gt;  &gt;  token(identifier, name)
+&gt;  &gt;  &gt;  #SelectExpression
+&gt;  &gt;  &gt;  &gt;  #ColumnIdentifier
+&gt;  &gt;  &gt;  &gt;  &gt;  token(identifier, age)
+&gt;  &gt;  #FromClause
+&gt;  &gt;  &gt;  #TableIdentifier
+&gt;  &gt;  &gt;  &gt;  token(identifier, person)
+</code></pre>
+          </div>
+        </section>
+
+        <section>
+          <h2>Utilisation de l'AST</h2>
+
+<pre><code data-trim class="php" style="overflow:hidden;overflow-x:scroll">
+class PrettyPrinter implements Hoa\Visitor\Visit {
+  public function visit(Hoa\Visitor\Element $element, &amp;$handle = null, $eldnah = null) {
+    switch ($element->getId()) {
+      case '#SelectClause':
+        $selectedExpressions = array();
+        foreach ($element->getChildren() as $child)
+          $selectedExpressions[] = $child->accept($this, $handle, $eldnah);
+        return 'SELECT ' . implode(', ', $selectedExpressions);
+      case '#FromClause':
+        $tables = array();
+        foreach ($element->getChildren() as $child)
+          $tables[] = $child->accept($this, $handle, $eldnah);
+        return "\n" . 'FROM '. implode(', ', $tables);
+      // ...
+    }
+  }
+}
+</code></pre>
+        </section>
+      </section>
+
+      <section>
+        <section>
+          <h1>Bonus</h1>
+        </section>
+
+        <section>
+          <h2>Génération automatique</h2>
+
+<pre class="fragment hidden"><code data-trim>
+$sampler = new Hoa\Compiler\Llk\Sampler\Coverage(
+    // Grammar.
+    Hoa\Compiler\Llk\Llk::load(new Hoa\File\Read('sql_sample.pp')),
+    // Token sampler.
+    new Hoa\Regex\Visitor\Isotropic(new Hoa\Math\Sampler\Random()),
+    // Length.
+    6
+);
+
+foreach($sampler as $i => $data)
+    echo $i, ' => ', $data, "\n";
+</code></pre>
+
+<pre class="fragment hidden"><code data-trim style="overflow: hidden">
+0 => SELECT v28__ AS Js32_B0 , w FROM T4 AS FO4Z0_ , y__ b3x_n , t3
+1 => SELECT wZ_ X ASS i0E_6 , Od , zl82Q_ FROM e_bNTB AS I8_d___u , X AS yl2
+2 => SELECT lBp FROM xV_v93Y AS j2a4991_
+</code></pre>
+
+          <p class="fragment hidden">
+            Technique utilisée dans le cadre du <em>Grammar-Based testing</em>
+          </p>
+        </section>
+      </section>
+
+      <section>
+        <h1>THE END</h1>
+        <h3>BY Kévin Gomez / <a href="https://twitter.com/KPhoen">@KPhoen</a></h3>
+      </section>
+    </div>
+  </div>
+
+  <script src="reveal.js/lib/js/head.min.js"></script>
+  <script src="reveal.js/js/reveal.min.js"></script>
+
+  <script>
+    // Full list of configuration options available here:
+    // https://github.com/hakimel/reveal.js#configuration
+    Reveal.initialize({
+      controls: true,
+      progress: true,
+      history: true,
+      center: true,
+
+      theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+      transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+
+      // Optional libraries used to extend on reveal.js
+      dependencies: [
+        { src: 'reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+        { src: 'reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+        { src: 'reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+        { src: 'reveal.js/plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+        { src: 'reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+        { src: 'reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+      ]
+    });
+  </script>
+  <script src="js/Hoa.Graph.js"></script>
+  <script src="js/Hoa.Graph.style.js"></script>
+</body>
+</html>

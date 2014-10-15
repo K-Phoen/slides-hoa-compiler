@@ -1,0 +1,21 @@
+.reveal section img:not(.bg-light) {
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+.reveal section img.bg-light {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+svg text {
+  font-size: 0.5em!important;
+}
+
+.fragment.hidden {
+  display: none;
+}
+
+.fragment.hidden.current-fragment {
+  display: block;
+}
